@@ -3,19 +3,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Clock, User } from "lucide-react";
-
-interface TeamMember {
-  id: string;
-  name: string;
-  role: string;
-  skills: string[];
-  currentCapacity: number; // percentage of weekly hours allocated
-  weeklyHours: number;
-  avatar?: string;
-}
+import type { TeamMemberWithStats } from "@shared/schema";
 
 interface TeamMemberCardProps {
-  member: TeamMember;
+  member: TeamMemberWithStats;
   onClick?: () => void;
 }
 
@@ -39,7 +30,7 @@ export default function TeamMemberCard({ member, onClick }: TeamMemberCardProps)
       <CardHeader className="pb-2">
         <div className="flex items-center gap-4">
           <Avatar className="h-10 w-10">
-            <AvatarImage src={member.avatar} alt={member.name} />
+            <AvatarImage src={member.avatar || undefined} alt={member.name} />
             <AvatarFallback>
               <User className="h-4 w-4" />
             </AvatarFallback>

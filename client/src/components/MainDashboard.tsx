@@ -22,16 +22,20 @@ import {
   Calendar
 } from "lucide-react";
 
-// todo: remove mock functionality
+// todo: remove mock functionality and integrate with real API
 const mockTeamMembers = [
   {
     id: "1",
     name: "Sarah Chen",
     role: "Senior DevOps Engineer", 
+    email: "sarah.chen@company.com",
     skills: ["Kubernetes", "AWS", "Docker", "Python", "Terraform"],
     currentCapacity: 95,
     weeklyHours: 40,
-    capacity: 95,
+    avatar: null,
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
     assignedHours: 38,
     currentProject: "OAuth Migration"
   },
@@ -39,10 +43,14 @@ const mockTeamMembers = [
     id: "2", 
     name: "Alex Kumar",
     role: "Full Stack Developer",
+    email: "alex.kumar@company.com",
     skills: ["React", "Node.js", "PostgreSQL", "TypeScript"],
     currentCapacity: 75,
     weeklyHours: 40,
-    capacity: 75,
+    avatar: null,
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
     assignedHours: 30,
     currentProject: "Payment Gateway"
   },
@@ -50,10 +58,14 @@ const mockTeamMembers = [
     id: "3",
     name: "Maria Garcia", 
     role: "Frontend Engineer",
+    email: "maria.garcia@company.com",
     skills: ["React", "CSS", "JavaScript", "Figma"],
     currentCapacity: 60,
     weeklyHours: 40,
-    capacity: 60,
+    avatar: null,
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
     assignedHours: 24,
     currentProject: "Dashboard UI"
   },
@@ -61,10 +73,14 @@ const mockTeamMembers = [
     id: "4",
     name: "David Kim",
     role: "Backend Developer", 
+    email: "david.kim@company.com",
     skills: ["Java", "Spring", "MySQL", "Redis"],
     currentCapacity: 105,
     weeklyHours: 40,
-    capacity: 105,
+    avatar: null,
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
     assignedHours: 42,
     currentProject: "API Refactoring"
   }
