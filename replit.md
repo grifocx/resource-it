@@ -34,7 +34,8 @@ The application utilizes React 18 with TypeScript, Wouter for routing, and Shadc
 
 - **Work Item Management**: Supports Demands, Projects, and O&M with distinct, workflow-based status systems (e.g., Demands: Draft → Submitted → Screened → Qualified → Approved → Complete; Projects: Initiating → Planning → Executing → Delivering → Closing; O&M: Planned → Active → On Hold → Completed). Statuses are color-coded and type-specific.
 - **Reporting**: Includes a Resource Utilization Report (team capacity, overallocation alerts, allocation breakdown) and a Work Pipeline Report (work item flow analysis, unallocated backlog).
-- **Capacity Planning**: Focuses on forward-looking allocations to calculate `allocatedHours`, `availableHours`, and `capacityPercentage` for team members and work items.
+- **Capacity Planning**: Interactive drag-and-drop prioritization board with four priority levels (Critical, High, Normal, Low). Work items can be reprioritized with database persistence. Displays real allocation data (hours per week, assigned team members) for each work item.
+- **Allocation Forecasting**: Focuses on forward-looking allocations to calculate `allocatedHours`, `availableHours`, and `capacityPercentage` for team members and work items.
 
 ### System Design Choices
 
@@ -69,3 +70,37 @@ The application utilizes React 18 with TypeScript, Wouter for routing, and Shadc
 - **Date Utilities**: `date-fns`
 - **Session Storage**: `connect-pg-simple` (installed but not actively used for authentication)
 - **WebSockets**: `ws`
+
+## Version 2.0 Implementation
+
+### Implemented Features
+
+**Type-Specific Work Item Management**:
+- ✅ Three distinct work item types (Demands, Projects, O&M) with dedicated workflow statuses
+- ✅ Dynamic status validation based on work item type using Zod schemas
+- ✅ Comprehensive color-coding system for statuses and types throughout the UI
+- ✅ Status dropdowns that automatically adapt to the selected work item type
+
+**Comprehensive Reporting**:
+- ✅ **Resource Utilization Report**: Team capacity overview, overallocation alerts, allocation breakdown by work type
+- ✅ **Work Pipeline Report**: Work item flow analysis by type and status, unallocated backlog identification
+- ✅ Real-time metrics including allocated hours, capacity percentages, and risk indicators
+- ✅ Tab-based interface for easy navigation between reports
+
+**Interactive Capacity Planning**:
+- ✅ Drag-and-drop prioritization board with four priority levels (Critical, High, Normal, Low)
+- ✅ Real-time display of work items with actual allocation data
+- ✅ Database persistence of priority changes via API mutations
+- ✅ Visual indicators showing hours per week and number of assigned team members per work item
+- ✅ Type-specific color coding consistent across the application
+
+### Future Enhancements
+
+**Planned Features**:
+- Authentication & role-based access control
+- Advanced trend analysis and forecasting reports
+- External integrations (Linear, GitHub, Calendar sync)
+- Skills-based allocation matching
+- Work item dependencies and critical path visualization
+- Customizable dashboard widgets
+- Mobile experience and PWA capabilities
