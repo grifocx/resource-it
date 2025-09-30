@@ -9,11 +9,11 @@ import { formatStatusLabel } from "@shared/schema";
 
 export default function Reports() {
   const { data: workItems = [], isLoading: isLoadingWorkItems } = useQuery<WorkItemWithAllocations[]>({
-    queryKey: ["/api", "work-items"],
+    queryKey: ["/api/work-items"],
   });
 
   const { data: teamMembers = [], isLoading: isLoadingMembers } = useQuery<TeamMemberWithStats[]>({
-    queryKey: ["/api", "team-members"],
+    queryKey: ["/api/team-members"],
   });
 
   const isLoading = isLoadingWorkItems || isLoadingMembers;
