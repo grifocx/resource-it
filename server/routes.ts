@@ -2,15 +2,88 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { 
+  insertTeamSchema,
+  updateTeamSchema,
   insertTeamMemberSchema, 
   updateTeamMemberSchema,
   insertWorkItemSchema,
   updateWorkItemSchema,
-  insertTimeEntrySchema,
+  insertAllocationSchema,
+  updateAllocationSchema,
   insertOutOfOfficeSchema
 } from "@shared/schema";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Teams routes
+  app.get("/api/teams", async (req, res) => {
+    try {
+      const teamsData = await storage.getTeams();
+      res.json(teamsData);
+    } catch (error) {
+      console.error("Error fetching teams:", error);
+      res.status(500).json({ error: "Failed to fetch teams" });
+    }
+  });
+
+  app.get("/api/teams/:id", async (req, res) => {
+    try {
+      const team = await storage.getTeam(req.params.id);
+      if (!team) {
+        return res.status(404).json({ error: "Team not found" });
+      }
+      res.json(team);
+    } catch (error) {
+      console.error("Error fetching team:", error);
+      res.status(500).json({ error: "Failed to fetch team" });
+    }
+  });
+
+  app.post("/api/teams", async (req, res) => {
+    try {
+      const validatedData = insertTeamSchema.parse(req.body);
+      const team = await storage.createTeam(validatedData);
+      res.status(201).json(team);
+    } catch (error) {
+      console.error("Error creating team:", error);
+      if (error instanceof Error && error.name === 'ZodError') {
+        res.status(422).json({ error: "Invalid data provided" });
+      } else {
+        res.status(500).json({ error: "Failed to create team" });
+      }
+    }
+  });
+
+  app.patch("/api/teams/:id", async (req, res) => {
+    try {
+      const validatedData = updateTeamSchema.parse(req.body);
+      const team = await storage.updateTeam(req.params.id, validatedData);
+      if (!team) {
+        return res.status(404).json({ error: "Team not found" });
+      }
+      res.json(team);
+    } catch (error) {
+      console.error("Error updating team:", error);
+      if (error instanceof Error && error.name === 'ZodError') {
+        res.status(422).json({ error: "Invalid data provided" });
+      } else {
+        res.status(500).json({ error: "Failed to update team" });
+      }
+    }
+  });
+
+  app.delete("/api/teams/:id", async (req, res) => {
+    try {
+      const success = await storage.deleteTeam(req.params.id);
+      if (!success) {
+        return res.status(404).json({ error: "Team not found" });
+      }
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting team:", error);
+      res.status(500).json({ error: "Failed to delete team" });
+    }
+  });
+
   // Team Members routes
   app.get("/api/team-members", async (req, res) => {
     try {
@@ -105,16 +178,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  app.get("/api/work-items/assignee/:assigneeId", async (req, res) => {
-    try {
-      const items = await storage.getWorkItemsByAssignee(req.params.assigneeId);
-      res.json(items);
-    } catch (error) {
-      console.error("Error fetching work items by assignee:", error);
-      res.status(500).json({ error: "Failed to fetch work items" });
-    }
-  });
-
   app.post("/api/work-items", async (req, res) => {
     try {
       const validatedData = insertWorkItemSchema.parse(req.body);
@@ -161,46 +224,64 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Time Entries routes
-  app.get("/api/time-entries", async (req, res) => {
+  // Allocations routes
+  app.get("/api/allocations", async (req, res) => {
     try {
       const { teamMemberId, workItemId } = req.query;
-      const entries = await storage.getTimeEntries(
+      const allocationsData = await storage.getAllocations(
         teamMemberId as string, 
         workItemId as string
       );
-      res.json(entries);
+      res.json(allocationsData);
     } catch (error) {
-      console.error("Error fetching time entries:", error);
-      res.status(500).json({ error: "Failed to fetch time entries" });
+      console.error("Error fetching allocations:", error);
+      res.status(500).json({ error: "Failed to fetch allocations" });
     }
   });
 
-  app.post("/api/time-entries", async (req, res) => {
+  app.post("/api/allocations", async (req, res) => {
     try {
-      const validatedData = insertTimeEntrySchema.parse(req.body);
-      const entry = await storage.createTimeEntry(validatedData);
-      res.status(201).json(entry);
+      const validatedData = insertAllocationSchema.parse(req.body);
+      const allocation = await storage.createAllocation(validatedData);
+      res.status(201).json(allocation);
     } catch (error) {
-      console.error("Error creating time entry:", error);
+      console.error("Error creating allocation:", error);
       if (error instanceof Error && error.name === 'ZodError') {
         res.status(422).json({ error: "Invalid data provided" });
       } else {
-        res.status(500).json({ error: "Failed to create time entry" });
+        res.status(500).json({ error: "Failed to create allocation" });
       }
     }
   });
 
-  app.delete("/api/time-entries/:id", async (req, res) => {
+  app.patch("/api/allocations/:id", async (req, res) => {
     try {
-      const success = await storage.deleteTimeEntry(req.params.id);
+      const validatedData = updateAllocationSchema.parse(req.body);
+      const allocation = await storage.updateAllocation(req.params.id, validatedData);
+      if (!allocation) {
+        return res.status(404).json({ error: "Allocation not found" });
+      }
+      res.json(allocation);
+    } catch (error) {
+      console.error("Error updating allocation:", error);
+      if (error instanceof Error && error.name === 'ZodError') {
+        res.status(422).json({ error: "Invalid data provided" });
+      } else {
+        res.status(500).json({ error: "Failed to update allocation" });
+      }
+    }
+  });
+
+  app.delete("/api/allocations/:id", async (req, res) => {
+    try {
+      const success = await storage.deleteAllocation(req.params.id);
       if (!success) {
-        return res.status(404).json({ error: "Time entry not found" });
+        return res.status(404).json({ error: "Allocation not found" });
       }
       res.status(204).send();
     } catch (error) {
-      console.error("Error deleting time entry:", error);
-      res.status(500).json({ error: "Failed to delete time entry" });
+      console.error("Error deleting allocation:", error);
+      res.status(500).json({ error: "Failed to delete allocation" });
     }
   });
 
@@ -241,17 +322,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deleting out of office:", error);
       res.status(500).json({ error: "Failed to delete out of office entry" });
-    }
-  });
-
-  // Analytics routes
-  app.get("/api/stats", async (req, res) => {
-    try {
-      const stats = await storage.getTeamStats();
-      res.json(stats);
-    } catch (error) {
-      console.error("Error fetching stats:", error);
-      res.status(500).json({ error: "Failed to fetch stats" });
     }
   });
 

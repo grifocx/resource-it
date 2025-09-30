@@ -1,27 +1,39 @@
 import { 
+  teams,
   teamMembers, 
   workItems, 
-  timeEntries, 
+  allocations,
   outOfOffice,
+  type Team,
   type TeamMember, 
   type WorkItem, 
-  type TimeEntry,
+  type Allocation,
   type OutOfOffice,
+  type InsertTeam,
   type InsertTeamMember, 
   type InsertWorkItem, 
-  type InsertTimeEntry,
+  type InsertAllocation,
   type InsertOutOfOffice,
+  type UpdateTeam,
   type UpdateTeamMember,
   type UpdateWorkItem,
+  type UpdateAllocation,
+  type TeamWithMembers,
   type TeamMemberWithStats,
-  type WorkItemWithAssignee,
-  type TimeEntryWithDetails
+  type WorkItemWithAllocations,
+  type AllocationWithDetails
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, sql, and } from "drizzle-orm";
 
-// Storage interface for IT Resource Management
 export interface IStorage {
+  // Teams
+  getTeams(): Promise<TeamWithMembers[]>;
+  getTeam(id: string): Promise<Team | undefined>;
+  createTeam(team: InsertTeam): Promise<Team>;
+  updateTeam(id: string, updates: UpdateTeam): Promise<Team | undefined>;
+  deleteTeam(id: string): Promise<boolean>;
+
   // Team Members
   getTeamMembers(): Promise<TeamMemberWithStats[]>;
   getTeamMember(id: string): Promise<TeamMember | undefined>;
@@ -30,34 +42,85 @@ export interface IStorage {
   deleteTeamMember(id: string): Promise<boolean>;
 
   // Work Items
-  getWorkItems(): Promise<WorkItemWithAssignee[]>;
+  getWorkItems(): Promise<WorkItemWithAllocations[]>;
   getWorkItem(id: string): Promise<WorkItem | undefined>;
-  getWorkItemsByAssignee(assigneeId: string): Promise<WorkItem[]>;
   createWorkItem(item: InsertWorkItem): Promise<WorkItem>;
   updateWorkItem(id: string, updates: UpdateWorkItem): Promise<WorkItem | undefined>;
   deleteWorkItem(id: string): Promise<boolean>;
 
-  // Time Entries
-  getTimeEntries(teamMemberId?: string, workItemId?: string): Promise<TimeEntryWithDetails[]>;
-  createTimeEntry(entry: InsertTimeEntry): Promise<TimeEntry>;
-  deleteTimeEntry(id: string): Promise<boolean>;
+  // Allocations
+  getAllocations(teamMemberId?: string, workItemId?: string): Promise<AllocationWithDetails[]>;
+  createAllocation(allocation: InsertAllocation): Promise<Allocation>;
+  updateAllocation(id: string, updates: UpdateAllocation): Promise<Allocation | undefined>;
+  deleteAllocation(id: string): Promise<boolean>;
 
   // Out of Office
   getOutOfOffice(teamMemberId?: string): Promise<OutOfOffice[]>;
   createOutOfOffice(ooo: InsertOutOfOffice): Promise<OutOfOffice>;
   deleteOutOfOffice(id: string): Promise<boolean>;
-
-  // Analytics
-  getTeamStats(): Promise<{
-    totalMembers: number;
-    averageCapacity: number;
-    projectHours: number;
-    omHours: number;
-    overallocatedMembers: number;
-  }>;
 }
 
 export class DatabaseStorage implements IStorage {
+  // Teams
+  async getTeams(): Promise<TeamWithMembers[]> {
+    const teamsData = await db
+      .select({
+        id: teams.id,
+        name: teams.name,
+        description: teams.description,
+        createdAt: teams.createdAt,
+        updatedAt: teams.updatedAt,
+        memberCount: sql<number>`COUNT(${teamMembers.id})`
+      })
+      .from(teams)
+      .leftJoin(teamMembers, eq(teams.id, teamMembers.teamId))
+      .groupBy(teams.id)
+      .orderBy(teams.name);
+
+    return teamsData.map(team => ({
+      ...team,
+      memberCount: Number(team.memberCount) || 0
+    }));
+  }
+
+  async getTeam(id: string): Promise<Team | undefined> {
+    const [team] = await db.select().from(teams).where(eq(teams.id, id));
+    return team || undefined;
+  }
+
+  async createTeam(team: InsertTeam): Promise<Team> {
+    const [newTeam] = await db
+      .insert(teams)
+      .values(team)
+      .returning();
+    return newTeam;
+  }
+
+  async updateTeam(id: string, updates: UpdateTeam): Promise<Team | undefined> {
+    const [updatedTeam] = await db
+      .update(teams)
+      .set(updates)
+      .where(eq(teams.id, id))
+      .returning();
+    return updatedTeam || undefined;
+  }
+
+  async deleteTeam(id: string): Promise<boolean> {
+    // First, remove team assignment from all members
+    await db
+      .update(teamMembers)
+      .set({ teamId: null })
+      .where(eq(teamMembers.teamId, id));
+    
+    // Then delete the team
+    const [deleted] = await db
+      .delete(teams)
+      .where(eq(teams.id, id))
+      .returning();
+    return !!deleted;
+  }
+
+  // Team Members
   async getTeamMembers(): Promise<TeamMemberWithStats[]> {
     const members = await db
       .select({
@@ -65,35 +128,42 @@ export class DatabaseStorage implements IStorage {
         name: teamMembers.name,
         role: teamMembers.role,
         email: teamMembers.email,
+        teamId: teamMembers.teamId,
         skills: teamMembers.skills,
         weeklyHours: teamMembers.weeklyHours,
-        currentCapacity: teamMembers.currentCapacity,
         avatar: teamMembers.avatar,
         isActive: teamMembers.isActive,
         createdAt: teamMembers.createdAt,
         updatedAt: teamMembers.updatedAt,
-        assignedHours: sql<number>`COALESCE(
-          (SELECT SUM(${workItems.estimatedHours}) 
-           FROM ${workItems} 
-           WHERE ${workItems.assignedToId} = ${teamMembers.id} 
-           AND ${workItems.status} != 'done'), 0
-        )`,
-        currentProject: sql<string>`(
-          SELECT ${workItems.title}
-          FROM ${workItems}
-          WHERE ${workItems.assignedToId} = ${teamMembers.id}
-          AND ${workItems.status} = 'in-progress'
-          LIMIT 1
+        teamName: teams.name,
+        allocatedHours: sql<number>`COALESCE(
+          (SELECT SUM(${allocations.hoursPerWeek}) 
+           FROM ${allocations} 
+           WHERE ${allocations.teamMemberId} = ${teamMembers.id}
+           AND ${allocations.startDate} <= NOW()
+           AND (${allocations.endDate} IS NULL OR ${allocations.endDate} >= NOW())), 0
         )`
       })
       .from(teamMembers)
-      .where(eq(teamMembers.isActive, true));
+      .leftJoin(teams, eq(teamMembers.teamId, teams.id))
+      .where(eq(teamMembers.isActive, true))
+      .orderBy(teamMembers.name);
 
-    return members.map(member => ({
-      ...member,
-      assignedHours: Number(member.assignedHours) || 0,
-      currentProject: member.currentProject || undefined
-    }));
+    return members.map(member => {
+      const allocatedHours = Number(member.allocatedHours) || 0;
+      const availableHours = member.weeklyHours - allocatedHours;
+      const capacityPercentage = member.weeklyHours > 0 
+        ? Math.round((allocatedHours / member.weeklyHours) * 100) 
+        : 0;
+
+      return {
+        ...member,
+        teamName: member.teamName || undefined,
+        allocatedHours,
+        availableHours,
+        capacityPercentage
+      };
+    });
   }
 
   async getTeamMember(id: string): Promise<TeamMember | undefined> {
@@ -119,7 +189,6 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteTeamMember(id: string): Promise<boolean> {
-    // Soft delete by setting isActive to false
     const [deleted] = await db
       .update(teamMembers)
       .set({ isActive: false })
@@ -128,48 +197,55 @@ export class DatabaseStorage implements IStorage {
     return !!deleted;
   }
 
-  async getWorkItems(): Promise<WorkItemWithAssignee[]> {
+  // Work Items
+  async getWorkItems(): Promise<WorkItemWithAllocations[]> {
     const items = await db
-      .select({
-        id: workItems.id,
-        title: workItems.title,
-        description: workItems.description,
-        type: workItems.type,
-        priority: workItems.priority,
-        status: workItems.status,
-        estimatedHours: workItems.estimatedHours,
-        actualHours: workItems.actualHours,
-        assignedToId: workItems.assignedToId,
-        dueDate: workItems.dueDate,
-        createdAt: workItems.createdAt,
-        updatedAt: workItems.updatedAt,
-        assignedTo: {
-          id: teamMembers.id,
-          name: teamMembers.name,
-          avatar: teamMembers.avatar
-        }
-      })
+      .select()
       .from(workItems)
-      .leftJoin(teamMembers, eq(workItems.assignedToId, teamMembers.id))
       .orderBy(desc(workItems.createdAt));
 
-    return items.map(item => ({
-      ...item,
-      assignedTo: item.assignedTo?.id ? item.assignedTo : undefined
-    }));
+    const itemsWithAllocations = await Promise.all(
+      items.map(async (item) => {
+        const itemAllocations = await db
+          .select({
+            id: allocations.id,
+            teamMemberId: allocations.teamMemberId,
+            workItemId: allocations.workItemId,
+            hoursPerWeek: allocations.hoursPerWeek,
+            startDate: allocations.startDate,
+            endDate: allocations.endDate,
+            notes: allocations.notes,
+            createdAt: allocations.createdAt,
+            updatedAt: allocations.updatedAt,
+            teamMember: {
+              id: teamMembers.id,
+              name: teamMembers.name,
+              avatar: teamMembers.avatar
+            }
+          })
+          .from(allocations)
+          .innerJoin(teamMembers, eq(allocations.teamMemberId, teamMembers.id))
+          .where(eq(allocations.workItemId, item.id));
+
+        const totalAllocatedHours = itemAllocations.reduce(
+          (sum, alloc) => sum + Number(alloc.hoursPerWeek), 
+          0
+        );
+
+        return {
+          ...item,
+          allocations: itemAllocations,
+          totalAllocatedHours
+        };
+      })
+    );
+
+    return itemsWithAllocations;
   }
 
   async getWorkItem(id: string): Promise<WorkItem | undefined> {
     const [item] = await db.select().from(workItems).where(eq(workItems.id, id));
     return item || undefined;
-  }
-
-  async getWorkItemsByAssignee(assigneeId: string): Promise<WorkItem[]> {
-    return await db
-      .select()
-      .from(workItems)
-      .where(eq(workItems.assignedToId, assigneeId))
-      .orderBy(desc(workItems.createdAt));
   }
 
   async createWorkItem(item: InsertWorkItem): Promise<WorkItem> {
@@ -197,37 +273,42 @@ export class DatabaseStorage implements IStorage {
     return !!deleted;
   }
 
-  async getTimeEntries(teamMemberId?: string, workItemId?: string): Promise<TimeEntryWithDetails[]> {
+  // Allocations
+  async getAllocations(teamMemberId?: string, workItemId?: string): Promise<AllocationWithDetails[]> {
     let whereConditions = [];
     
     if (teamMemberId) {
-      whereConditions.push(eq(timeEntries.teamMemberId, teamMemberId));
+      whereConditions.push(eq(allocations.teamMemberId, teamMemberId));
     }
     if (workItemId) {
-      whereConditions.push(eq(timeEntries.workItemId, workItemId));
+      whereConditions.push(eq(allocations.workItemId, workItemId));
     }
 
     const query = db
       .select({
-        id: timeEntries.id,
-        teamMemberId: timeEntries.teamMemberId,
-        workItemId: timeEntries.workItemId,
-        hours: timeEntries.hours,
-        description: timeEntries.description,
-        date: timeEntries.date,
-        createdAt: timeEntries.createdAt,
+        id: allocations.id,
+        teamMemberId: allocations.teamMemberId,
+        workItemId: allocations.workItemId,
+        hoursPerWeek: allocations.hoursPerWeek,
+        startDate: allocations.startDate,
+        endDate: allocations.endDate,
+        notes: allocations.notes,
+        createdAt: allocations.createdAt,
+        updatedAt: allocations.updatedAt,
         workItem: {
           title: workItems.title,
-          type: workItems.type
+          type: workItems.type,
+          status: workItems.status
         },
         teamMember: {
-          name: teamMembers.name
+          name: teamMembers.name,
+          teamId: teamMembers.teamId
         }
       })
-      .from(timeEntries)
-      .innerJoin(workItems, eq(timeEntries.workItemId, workItems.id))
-      .innerJoin(teamMembers, eq(timeEntries.teamMemberId, teamMembers.id))
-      .orderBy(desc(timeEntries.date));
+      .from(allocations)
+      .innerJoin(workItems, eq(allocations.workItemId, workItems.id))
+      .innerJoin(teamMembers, eq(allocations.teamMemberId, teamMembers.id))
+      .orderBy(desc(allocations.startDate));
 
     if (whereConditions.length > 0) {
       return await query.where(and(...whereConditions));
@@ -236,31 +317,32 @@ export class DatabaseStorage implements IStorage {
     return await query;
   }
 
-  async createTimeEntry(entry: InsertTimeEntry): Promise<TimeEntry> {
-    const [newEntry] = await db
-      .insert(timeEntries)
-      .values(entry)
+  async createAllocation(allocation: InsertAllocation): Promise<Allocation> {
+    const [newAllocation] = await db
+      .insert(allocations)
+      .values(allocation)
       .returning();
-
-    // Update actual hours on the work item
-    await db
-      .update(workItems)
-      .set({
-        actualHours: sql`${workItems.actualHours} + ${entry.hours}`
-      })
-      .where(eq(workItems.id, entry.workItemId));
-
-    return newEntry;
+    return newAllocation;
   }
 
-  async deleteTimeEntry(id: string): Promise<boolean> {
+  async updateAllocation(id: string, updates: UpdateAllocation): Promise<Allocation | undefined> {
+    const [updatedAllocation] = await db
+      .update(allocations)
+      .set(updates)
+      .where(eq(allocations.id, id))
+      .returning();
+    return updatedAllocation || undefined;
+  }
+
+  async deleteAllocation(id: string): Promise<boolean> {
     const [deleted] = await db
-      .delete(timeEntries)
-      .where(eq(timeEntries.id, id))
+      .delete(allocations)
+      .where(eq(allocations.id, id))
       .returning();
     return !!deleted;
   }
 
+  // Out of Office
   async getOutOfOffice(teamMemberId?: string): Promise<OutOfOffice[]> {
     const baseQuery = db
       .select()
@@ -288,44 +370,6 @@ export class DatabaseStorage implements IStorage {
       .where(eq(outOfOffice.id, id))
       .returning();
     return !!deleted;
-  }
-
-  async getTeamStats(): Promise<{
-    totalMembers: number;
-    averageCapacity: number;
-    projectHours: number;
-    omHours: number;
-    overallocatedMembers: number;
-  }> {
-    // Get basic team stats
-    const teamStats = await db
-      .select({
-        totalMembers: sql<number>`COUNT(*)`,
-        averageCapacity: sql<number>`AVG(${teamMembers.currentCapacity})`,
-        overallocatedMembers: sql<number>`COUNT(CASE WHEN ${teamMembers.currentCapacity} >= 90 THEN 1 END)`
-      })
-      .from(teamMembers)
-      .where(eq(teamMembers.isActive, true));
-
-    // Get work hours by type
-    const workStats = await db
-      .select({
-        type: workItems.type,
-        totalHours: sql<number>`SUM(${workItems.actualHours})`
-      })
-      .from(workItems)
-      .groupBy(workItems.type);
-
-    const projectHours = workStats.find(s => s.type === 'project')?.totalHours || 0;
-    const omHours = workStats.find(s => s.type === 'om')?.totalHours || 0;
-
-    return {
-      totalMembers: Number(teamStats[0]?.totalMembers) || 0,
-      averageCapacity: Math.round(Number(teamStats[0]?.averageCapacity)) || 0,
-      projectHours: Number(projectHours),
-      omHours: Number(omHours),
-      overallocatedMembers: Number(teamStats[0]?.overallocatedMembers) || 0
-    };
   }
 }
 
