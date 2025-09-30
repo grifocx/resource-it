@@ -5,12 +5,24 @@
 This is an IT Resource Management application designed to help teams track resource allocation, manage work items (demands, projects, and operations & maintenance tasks), and visualize team capacity. The application enables managers and team leads to prioritize work, forecast resource needs, and prevent team member burnout through capacity planning.
 
 Key features include:
-- Team and team member management with skill tracking
+- Team management with organizational grouping
+- Team member management with skill tracking and team assignment
 - Work item tracking (demands, projects, O&M tasks)
-- Resource allocation and capacity planning
-- Time tracking and availability management
+- **Allocation-based capacity forecasting** (forward-looking hours/week commitments)
+- Availability management for out-of-office tracking
 - Priority-based work organization
-- Real-time capacity visualization
+- Real-time capacity visualization based on forecasted allocations
+
+## Recent Changes (September 2025)
+
+**Transformation from Time Tracking to Allocation Forecasting**:
+- Removed historical time tracking (time_entries table) in favor of forward-looking capacity planning
+- Added teams table for organizational structure
+- Added allocations table to forecast weekly hour commitments with start/end dates
+- Updated capacity calculations to only count active allocations (startDate <= NOW() and endDate >= NOW() or null)
+- Team members now show: allocated hours, available hours, and capacity percentage based on forecasts
+- Work items display total allocated hours per week and assigned team members
+- Dashboard provides real-time metrics: team count, average capacity, active items, and weekly allocation totals
 
 ## User Preferences
 
@@ -22,7 +34,7 @@ Preferred communication style: Simple, everyday language.
 
 **Framework**: React 18 with TypeScript, using Vite as the build tool and development server.
 
-**Routing**: Wouter for lightweight client-side routing, supporting pages for Dashboard, Teams, Team Members, Work Items, Priorities, and Availability management.
+**Routing**: Wouter for lightweight client-side routing, supporting pages for Dashboard, Teams, Team Members, Work Items, Capacity Planning, and Availability management.
 
 **UI Component Library**: Shadcn/ui (New York style) with Radix UI primitives. The application uses a comprehensive set of pre-built components including dialogs, forms, cards, dropdowns, and data tables. Components are organized in `client/src/components/ui/`.
 
@@ -61,18 +73,23 @@ Preferred communication style: Simple, everyday language.
 
 **Schema Design**:
 
-- **teams**: Core organizational units with name and description
-- **team_members**: Individual contributors with skills (JSON array), weekly hours, role, and active status
-- **work_items**: Tasks/projects with type (demand/project/om), priority, status, and estimated hours
-- **allocations**: Resource forecasts linking team members to work items with weekly hour allocations and date ranges
-- **out_of_office**: Time-off tracking with date ranges and reasons
+- **teams**: Core organizational units (id, name, description, created_at, updated_at)
+- **team_members**: Individual contributors with skills (JSON array), weekly hours, role, team assignment, and active status (id, name, email, role, team_id, skills, weekly_hours, avatar, is_active, created_at, updated_at)
+- **work_items**: Tasks/projects with type (demand/project/om), status (backlog/planned/in-progress/completed/on-hold), and descriptions (id, title, description, type, status, created_at, updated_at)
+- **allocations**: Forward-looking resource forecasts linking team members to work items with weekly hour commitments and date ranges (id, team_member_id, work_item_id, hours_per_week, start_date, end_date, notes, created_at, updated_at)
+- **out_of_office**: Time-off tracking with date ranges and reasons (id, team_member_id, start_date, end_date, reason, created_at, updated_at)
 
 **Key Relationships**:
-- Team members belong to teams (optional foreign key)
-- Allocations link team members to work items
+- Team members belong to teams via team_id foreign key (nullable, with cascade handling on team deletion)
+- Allocations link team members to work items (with cascade delete)
 - Out-of-office entries belong to team members
 
-**Computed Data**: The application calculates capacity percentages, allocated hours, and availability statistics at query time rather than storing derived values.
+**Computed Data**: The application calculates capacity metrics at query time:
+- **allocatedHours**: Sum of hours_per_week for all active allocations (startDate <= NOW() and endDate >= NOW() or null)
+- **availableHours**: weeklyHours - allocatedHours
+- **capacityPercentage**: (allocatedHours / weeklyHours) × 100
+
+This ensures capacity reflects current forward-looking commitments, not historical work.
 
 **Migration Strategy**: Drizzle Kit for schema migrations with configuration in `drizzle.config.ts`. Migrations stored in `/migrations` directory.
 
