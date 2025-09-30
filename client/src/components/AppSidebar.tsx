@@ -1,4 +1,4 @@
-import { Calendar, Clock, Home, Settings, TrendingUp, Users, Workflow, Plus } from "lucide-react";
+import { Calendar, Clock, Home, Settings, TrendingUp, Users, UserPlus, Workflow, Plus } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -20,9 +20,14 @@ const menuItems = [
     icon: Home,
   },
   {
-    title: "Team",
-    url: "/team", 
+    title: "Teams",
+    url: "/teams", 
     icon: Users,
+  },
+  {
+    title: "Team Members",
+    url: "/team-members", 
+    icon: UserPlus,
   },
   {
     title: "Work Items",
@@ -30,14 +35,9 @@ const menuItems = [
     icon: Workflow,
   },
   {
-    title: "Priorities",
+    title: "Capacity Planning",
     url: "/priorities",
     icon: TrendingUp,
-  },
-  {
-    title: "Time Tracking", 
-    url: "/time-tracking",
-    icon: Clock,
   },
   {
     title: "Reports",
@@ -99,13 +99,13 @@ export default function AppSidebar({ onQuickAction }: AppSidebarProps) {
               size="sm" 
               className="w-full justify-start"
               onClick={() => {
-                onQuickAction?.('log-time');
-                console.log('Quick action: log time');
+                onQuickAction?.('add-allocation');
+                console.log('Quick action: add allocation');
               }}
-              data-testid="button-quick-log-time"
+              data-testid="button-quick-add-allocation"
             >
               <Clock className="h-4 w-4 mr-2" />
-              Log Time
+              Add Allocation
             </Button>
             <Button 
               size="sm" 

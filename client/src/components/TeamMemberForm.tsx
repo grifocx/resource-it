@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
+import { useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,6 +12,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
+  FormDescription,
 } from "@/components/ui/form";
 import {
   Select,
@@ -21,7 +23,7 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { X, Plus } from "lucide-react";
-import { insertTeamMemberSchema, type InsertTeamMember, type TeamMember } from "@shared/schema";
+import { insertTeamMemberSchema, type InsertTeamMember, type TeamMember, type Team } from "@shared/schema";
 
 interface TeamMemberFormProps {
   member?: TeamMember;
@@ -54,15 +56,19 @@ export default function TeamMemberForm({ member, onSave, onCancel, isLoading = f
   const [newSkill, setNewSkill] = useState("");
   const [skills, setSkills] = useState<string[]>(member?.skills || []);
 
+  const { data: teams = [] } = useQuery<Team[]>({
+    queryKey: ["/api", "teams"],
+  });
+
   const form = useForm<InsertTeamMember>({
     resolver: zodResolver(insertTeamMemberSchema),
     defaultValues: {
       name: member?.name || "",
       role: member?.role || "",
       email: member?.email || "",
+      teamId: member?.teamId || null,
       skills: member?.skills || [],
       weeklyHours: member?.weeklyHours || 40,
-      currentCapacity: member?.currentCapacity || 0,
       isActive: member?.isActive ?? true,
     },
   });
@@ -125,30 +131,62 @@ export default function TeamMemberForm({ member, onSave, onCancel, isLoading = f
           />
         </div>
 
-        <FormField
-          control={form.control}
-          name="role"
-          render={({ field }) => (
-            <FormItem>
-              <FormLabel>Role</FormLabel>
-              <Select onValueChange={field.onChange} value={field.value}>
-                <FormControl>
-                  <SelectTrigger data-testid="select-member-role">
-                    <SelectValue placeholder="Select role" />
-                  </SelectTrigger>
-                </FormControl>
-                <SelectContent>
-                  {commonRoles.map((role) => (
-                    <SelectItem key={role} value={role}>
-                      {role}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <FormMessage />
-            </FormItem>
-          )}
-        />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="role"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Role</FormLabel>
+                <Select onValueChange={field.onChange} value={field.value}>
+                  <FormControl>
+                    <SelectTrigger data-testid="select-member-role">
+                      <SelectValue placeholder="Select role" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    {commonRoles.map((role) => (
+                      <SelectItem key={role} value={role}>
+                        {role}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="teamId"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Team</FormLabel>
+                <Select 
+                  onValueChange={(value) => field.onChange(value === "none" ? null : value)} 
+                  value={field.value || "none"}
+                >
+                  <FormControl>
+                    <SelectTrigger data-testid="select-member-team">
+                      <SelectValue placeholder="Unassigned" />
+                    </SelectTrigger>
+                  </FormControl>
+                  <SelectContent>
+                    <SelectItem value="none">Unassigned</SelectItem>
+                    {teams.map((team) => (
+                      <SelectItem key={team.id} value={team.id}>
+                        {team.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <FormDescription>Optional - assign member to a team</FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <FormField
@@ -168,28 +206,7 @@ export default function TeamMemberForm({ member, onSave, onCancel, isLoading = f
                     onChange={(e) => field.onChange(Number(e.target.value))}
                   />
                 </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-
-          <FormField
-            control={form.control}
-            name="currentCapacity"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Current Capacity (%)</FormLabel>
-                <FormControl>
-                  <Input 
-                    type="number" 
-                    min="0" 
-                    max="150" 
-                    placeholder="0" 
-                    data-testid="input-member-capacity"
-                    {...field} 
-                    onChange={(e) => field.onChange(Number(e.target.value))}
-                  />
-                </FormControl>
+                <FormDescription>Standard weekly availability</FormDescription>
                 <FormMessage />
               </FormItem>
             )}

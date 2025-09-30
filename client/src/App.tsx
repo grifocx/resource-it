@@ -8,6 +8,7 @@ import AppSidebar from "@/components/AppSidebar";
 import ThemeToggle from "@/components/ThemeToggle";
 import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/Dashboard";
+import Teams from "@/pages/Teams";
 import Team from "@/pages/Team";
 import Priorities from "@/pages/Priorities";
 import Availability from "@/pages/Availability";
@@ -16,7 +17,8 @@ function Router() {
   return (
     <Switch>
       <Route path="/" component={Dashboard} />
-      <Route path="/team" component={Team} />
+      <Route path="/teams" component={Teams} />
+      <Route path="/team-members" component={Team} />
       <Route path="/priorities" component={Priorities} />
       <Route path="/availability" component={Availability} />
       <Route component={NotFound} />
