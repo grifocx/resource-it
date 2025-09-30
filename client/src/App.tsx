@@ -40,7 +40,7 @@ export default function App() {
       <TooltipProvider>
         <SidebarProvider style={style as React.CSSProperties}>
           <div className="flex h-screen w-full">
-            <AppSidebar onQuickAction={(action: string) => console.log('Quick action:', action)} />
+            <AppSidebar />
             <div className="flex flex-col flex-1">
               <header className="flex items-center justify-between p-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
                 <SidebarTrigger data-testid="button-sidebar-toggle" />
