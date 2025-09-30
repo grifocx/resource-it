@@ -1,7 +1,64 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, decimal, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, decimal, timestamp, boolean, jsonb, pgEnum } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
+
+// PostgreSQL enums for work item statuses
+export const demandStatusEnum = pgEnum("demand_status", [
+  "draft",
+  "submitted",
+  "screened",
+  "qualified-approved",
+  "complete",
+  "deferred",
+  "rejected"
+]);
+
+export const projectStatusEnum = pgEnum("project_status", [
+  "initiating",
+  "planning",
+  "executing",
+  "delivering",
+  "closing"
+]);
+
+export const omStatusEnum = pgEnum("om_status", [
+  "planned",
+  "active",
+  "on-hold",
+  "completed"
+]);
+
+// Status arrays for helper functions
+export const demandStatuses = [
+  "draft",
+  "submitted",
+  "screened",
+  "qualified-approved",
+  "complete",
+  "deferred",
+  "rejected"
+] as const;
+
+export const projectStatuses = [
+  "initiating",
+  "planning",
+  "executing",
+  "delivering",
+  "closing"
+] as const;
+
+export const omStatuses = [
+  "planned",
+  "active",
+  "on-hold",
+  "completed"
+] as const;
+
+export type DemandStatus = typeof demandStatuses[number];
+export type ProjectStatus = typeof projectStatuses[number];
+export type OMStatus = typeof omStatuses[number];
+export type WorkItemStatus = DemandStatus | ProjectStatus | OMStatus;
 
 // Teams table
 export const teams = pgTable("teams", {
@@ -34,7 +91,7 @@ export const workItems = pgTable("work_items", {
   description: text("description").notNull().default(""),
   type: text("type").notNull(), // "demand" | "project" | "om"
   priority: text("priority").notNull().default("normal"), // "critical" | "high" | "normal" | "low"
-  status: text("status").notNull().default("todo"), // "todo" | "in-progress" | "review" | "done"
+  status: text("status").notNull(), // Status depends on type - see validation below
   estimatedHours: decimal("estimated_hours", { precision: 5, scale: 2 }).notNull().default("0"),
   dueDate: timestamp("due_date"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -77,11 +134,30 @@ export const insertTeamMemberSchema = createInsertSchema(teamMembers).omit({
   updatedAt: true,
 });
 
-export const insertWorkItemSchema = createInsertSchema(workItems).omit({
+// Custom validation for work items with type-specific status
+const baseInsertWorkItemSchema = createInsertSchema(workItems).omit({
   id: true,
   createdAt: true,
   updatedAt: true,
 });
+
+export const insertWorkItemSchema = baseInsertWorkItemSchema.refine(
+  (data) => {
+    // Validate status matches work item type
+    if (data.type === "demand") {
+      return demandStatuses.includes(data.status as DemandStatus);
+    } else if (data.type === "project") {
+      return projectStatuses.includes(data.status as ProjectStatus);
+    } else if (data.type === "om") {
+      return omStatuses.includes(data.status as OMStatus);
+    }
+    return false;
+  },
+  {
+    message: "Invalid status for the selected work item type",
+    path: ["status"],
+  }
+);
 
 export const insertAllocationSchema = createInsertSchema(allocations).omit({
   id: true,
@@ -97,7 +173,26 @@ export const insertOutOfOfficeSchema = createInsertSchema(outOfOffice).omit({
 // Update schemas
 export const updateTeamSchema = insertTeamSchema.partial();
 export const updateTeamMemberSchema = insertTeamMemberSchema.partial();
-export const updateWorkItemSchema = insertWorkItemSchema.partial();
+export const updateWorkItemSchema = baseInsertWorkItemSchema.partial().refine(
+  (data) => {
+    // Only validate if both type and status are provided
+    if (!data.type || !data.status) return true;
+    
+    // Validate status matches work item type
+    if (data.type === "demand") {
+      return demandStatuses.includes(data.status as DemandStatus);
+    } else if (data.type === "project") {
+      return projectStatuses.includes(data.status as ProjectStatus);
+    } else if (data.type === "om") {
+      return omStatuses.includes(data.status as OMStatus);
+    }
+    return false;
+  },
+  {
+    message: "Invalid status for the selected work item type",
+    path: ["status"],
+  }
+);
 export const updateAllocationSchema = insertAllocationSchema.partial();
 
 // Types
@@ -141,3 +236,37 @@ export type AllocationWithDetails = Allocation & {
   workItem: Pick<WorkItem, "title" | "type" | "status">;
   teamMember: Pick<TeamMember, "name" | "teamId">;
 };
+
+// Helper functions for work item status
+export function getValidStatusesForType(type: string): readonly string[] {
+  switch (type) {
+    case "demand":
+      return demandStatuses;
+    case "project":
+      return projectStatuses;
+    case "om":
+      return omStatuses;
+    default:
+      return [];
+  }
+}
+
+export function getDefaultStatusForType(type: string): string {
+  switch (type) {
+    case "demand":
+      return "draft";
+    case "project":
+      return "initiating";
+    case "om":
+      return "planned";
+    default:
+      return "draft";
+  }
+}
+
+export function formatStatusLabel(status: string): string {
+  return status
+    .split("-")
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}

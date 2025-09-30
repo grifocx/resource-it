@@ -28,21 +28,13 @@ import { apiRequest, queryClient } from "@/lib/queryClient";
 import type { WorkItemWithAllocations, InsertWorkItem, WorkItem } from "@shared/schema";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertWorkItemSchema } from "@shared/schema";
+import { insertWorkItemSchema, getValidStatusesForType, getDefaultStatusForType, formatStatusLabel } from "@shared/schema";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 
 const workItemTypes = [
   { value: "demand", label: "Demand", description: "New feature requests or enhancements" },
   { value: "project", label: "Project", description: "Large initiatives with defined scope" },
   { value: "om", label: "O&M", description: "Operations & Maintenance work" },
-] as const;
-
-const statusOptions = [
-  { value: "backlog", label: "Backlog" },
-  { value: "planned", label: "Planned" },
-  { value: "in-progress", label: "In Progress" },
-  { value: "completed", label: "Completed" },
-  { value: "on-hold", label: "On Hold" },
 ] as const;
 
 export default function WorkItems() {
@@ -61,7 +53,7 @@ export default function WorkItems() {
       title: "",
       description: "",
       type: "demand",
-      status: "backlog",
+      status: "draft",
     },
   });
 
@@ -152,7 +144,7 @@ export default function WorkItems() {
         title: "",
         description: "",
         type: "demand",
-        status: "backlog",
+        status: "draft",
       });
     }
     setShowDialog(true);
@@ -183,14 +175,29 @@ export default function WorkItems() {
   };
 
   const getStatusColor = (status: string) => {
-    switch (status) {
-      case "backlog": return "bg-gray-500/10 text-gray-500";
-      case "planned": return "bg-blue-500/10 text-blue-500";
-      case "in-progress": return "bg-yellow-500/10 text-yellow-500";
-      case "completed": return "bg-green-500/10 text-green-500";
-      case "on-hold": return "bg-orange-500/10 text-orange-500";
-      default: return "bg-gray-500/10 text-gray-500";
-    }
+    // Demand statuses
+    if (status === "draft") return "bg-gray-500/10 text-gray-500";
+    if (status === "submitted") return "bg-blue-500/10 text-blue-500";
+    if (status === "screened") return "bg-cyan-500/10 text-cyan-500";
+    if (status === "qualified-approved") return "bg-green-500/10 text-green-500";
+    if (status === "complete") return "bg-emerald-600/10 text-emerald-600";
+    if (status === "deferred") return "bg-orange-500/10 text-orange-500";
+    if (status === "rejected") return "bg-red-500/10 text-red-500";
+    
+    // Project statuses
+    if (status === "initiating") return "bg-indigo-500/10 text-indigo-500";
+    if (status === "planning") return "bg-blue-500/10 text-blue-500";
+    if (status === "executing") return "bg-yellow-500/10 text-yellow-500";
+    if (status === "delivering") return "bg-green-500/10 text-green-500";
+    if (status === "closing") return "bg-emerald-600/10 text-emerald-600";
+    
+    // O&M statuses
+    if (status === "planned") return "bg-blue-500/10 text-blue-500";
+    if (status === "active") return "bg-green-500/10 text-green-500";
+    if (status === "on-hold") return "bg-orange-500/10 text-orange-500";
+    if (status === "completed") return "bg-emerald-600/10 text-emerald-600";
+    
+    return "bg-gray-500/10 text-gray-500";
   };
 
   if (isLoading) {
@@ -240,7 +247,7 @@ export default function WorkItems() {
                         {workItemTypes.find(t => t.value === item.type)?.label || item.type}
                       </Badge>
                       <Badge variant="secondary" className={getStatusColor(item.status)} data-testid={`badge-status-${item.id}`}>
-                        {statusOptions.find(s => s.value === item.status)?.label || item.status}
+                        {formatStatusLabel(item.status)}
                       </Badge>
                     </div>
                     <CardTitle className="text-xl" data-testid={`text-work-item-title-${item.id}`}>
@@ -355,7 +362,14 @@ export default function WorkItems() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Type</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
+                      <Select 
+                        onValueChange={(value) => {
+                          field.onChange(value);
+                          // Update status to default for new type
+                          form.setValue("status", getDefaultStatusForType(value));
+                        }} 
+                        value={field.value}
+                      >
                         <FormControl>
                           <SelectTrigger data-testid="select-work-item-type">
                             <SelectValue />
@@ -376,26 +390,31 @@ export default function WorkItems() {
                 <FormField
                   control={form.control}
                   name="status"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Status</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-work-item-status">
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {statusOptions.map((status) => (
-                            <SelectItem key={status.value} value={status.value}>
-                              {status.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  render={({ field }) => {
+                    const selectedType = form.watch("type");
+                    const validStatuses = getValidStatusesForType(selectedType);
+                    
+                    return (
+                      <FormItem>
+                        <FormLabel>Status</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-work-item-status">
+                              <SelectValue />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {validStatuses.map((status) => (
+                              <SelectItem key={status} value={status}>
+                                {formatStatusLabel(status)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    );
+                  }}
                 />
               </div>
               <FormField
