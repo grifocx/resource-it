@@ -10,6 +10,7 @@ import NotFound from "@/pages/not-found";
 import Dashboard from "@/pages/Dashboard";
 import Teams from "@/pages/Teams";
 import Team from "@/pages/Team";
+import WorkItems from "@/pages/WorkItems";
 import Priorities from "@/pages/Priorities";
 import Availability from "@/pages/Availability";
 
@@ -19,6 +20,7 @@ function Router() {
       <Route path="/" component={Dashboard} />
       <Route path="/teams" component={Teams} />
       <Route path="/team-members" component={Team} />
+      <Route path="/work-items" component={WorkItems} />
       <Route path="/priorities" component={Priorities} />
       <Route path="/availability" component={Availability} />
       <Route component={NotFound} />

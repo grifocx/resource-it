@@ -1,143 +1,52 @@
-import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import TeamMemberCard from "./TeamMemberCard";
-import WorkItemCard from "./WorkItemCard";
-import ResourceOverview from "./ResourceOverview";
-import TimeLogEntry from "./TimeLogEntry";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle,
-  DialogTrigger
-} from "@/components/ui/dialog";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Progress } from "@/components/ui/progress";
+import { Link } from "wouter";
+import { Button } from "@/components/ui/button";
 import { 
   Clock, 
-  Plus, 
-  TrendingUp, 
   Users, 
   Workflow,
-  Calendar
+  Calendar,
+  TrendingUp,
+  AlertCircle,
+  Loader2
 } from "lucide-react";
-
-// todo: remove mock functionality and integrate with real API
-const mockTeamMembers = [
-  {
-    id: "1",
-    name: "Sarah Chen",
-    role: "Senior DevOps Engineer", 
-    email: "sarah.chen@company.com",
-    skills: ["Kubernetes", "AWS", "Docker", "Python", "Terraform"],
-    currentCapacity: 95,
-    weeklyHours: 40,
-    avatar: null,
-    isActive: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    assignedHours: 38,
-    currentProject: "OAuth Migration"
-  },
-  {
-    id: "2", 
-    name: "Alex Kumar",
-    role: "Full Stack Developer",
-    email: "alex.kumar@company.com",
-    skills: ["React", "Node.js", "PostgreSQL", "TypeScript"],
-    currentCapacity: 75,
-    weeklyHours: 40,
-    avatar: null,
-    isActive: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    assignedHours: 30,
-    currentProject: "Payment Gateway"
-  },
-  {
-    id: "3",
-    name: "Maria Garcia", 
-    role: "Frontend Engineer",
-    email: "maria.garcia@company.com",
-    skills: ["React", "CSS", "JavaScript", "Figma"],
-    currentCapacity: 60,
-    weeklyHours: 40,
-    avatar: null,
-    isActive: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    assignedHours: 24,
-    currentProject: "Dashboard UI"
-  },
-  {
-    id: "4",
-    name: "David Kim",
-    role: "Backend Developer", 
-    email: "david.kim@company.com",
-    skills: ["Java", "Spring", "MySQL", "Redis"],
-    currentCapacity: 105,
-    weeklyHours: 40,
-    avatar: null,
-    isActive: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-    assignedHours: 42,
-    currentProject: "API Refactoring"
-  }
-];
-
-const mockWorkItems = [
-  {
-    id: "1",
-    title: "Migrate user authentication to OAuth 2.0 with PKCE flow", 
-    type: "project" as const,
-    priority: "high" as const,
-    estimatedHours: 16,
-    assignedTo: { id: "1", name: "Alex Kumar" },
-    status: "in-progress" as const,
-    dueDate: "Mar 15",
-    description: "Replace current session-based auth with modern OAuth 2.0 implementation for better security and user experience"
-  },
-  {
-    id: "2",
-    title: "Fix payment gateway timeout issues",
-    type: "om" as const,
-    priority: "critical" as const, 
-    estimatedHours: 8,
-    assignedTo: { id: "1", name: "Sarah Chen" },
-    status: "in-progress" as const,
-    dueDate: "Mar 10",
-    description: "Investigate and resolve timeout issues causing failed transactions in payment processing"
-  },
-  {
-    id: "3", 
-    title: "Update CI/CD pipeline for faster deployments",
-    type: "project" as const,
-    priority: "normal" as const,
-    estimatedHours: 20,
-    status: "todo" as const,
-    dueDate: "Mar 20", 
-    description: "Optimize build processes and deployment workflows to reduce deployment time from 15 minutes to under 5 minutes"
-  }
-];
-
-const mockTimeLogItems = [
-  { id: "1", title: "OAuth Migration Project", type: "project" as const },
-  { id: "2", title: "Payment Gateway O&M", type: "om" as const },
-  { id: "3", title: "CI/CD Pipeline Updates", type: "project" as const },
-  { id: "4", title: "Database Maintenance", type: "om" as const }
-];
-
-const mockResourceStats = {
-  totalTeamMembers: 8,
-  averageCapacity: 84,
-  projectHours: 276,
-  omHours: 94,
-  overallocatedMembers: 2
-};
+import type { TeamMemberWithStats, WorkItemWithAllocations, TeamWithMembers } from "@shared/schema";
 
 export default function MainDashboard() {
-  const [showTimeLog, setShowTimeLog] = useState(false);
+  const { data: teamMembers = [], isLoading: loadingMembers } = useQuery<TeamMemberWithStats[]>({
+    queryKey: ["/api", "team-members"],
+  });
+
+  const { data: workItems = [], isLoading: loadingWorkItems } = useQuery<WorkItemWithAllocations[]>({
+    queryKey: ["/api", "work-items"],
+  });
+
+  const { data: teams = [], isLoading: loadingTeams } = useQuery<TeamWithMembers[]>({
+    queryKey: ["/api", "teams"],
+  });
+
+  // Calculate statistics
+  const avgCapacity = teamMembers.length > 0
+    ? Math.round(teamMembers.reduce((sum, m) => sum + m.capacityPercentage, 0) / teamMembers.length)
+    : 0;
+
+  const overAllocated = teamMembers.filter(m => m.capacityPercentage >= 100).length;
+  const totalAllocatedHours = teamMembers.reduce((sum, m) => sum + m.allocatedHours, 0);
+  const activeWorkItems = workItems.filter(w => w.status === 'in-progress' || w.status === 'planned').length;
+
+  const isLoading = loadingMembers || loadingWorkItems || loadingTeams;
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6" data-testid="main-dashboard">
@@ -146,30 +55,9 @@ export default function MainDashboard() {
         <div>
           <h1 className="text-2xl font-bold">IT Resource Manager</h1>
           <p className="text-muted-foreground">
-            Track team capacity, prioritize work, and manage resource allocation
+            Track team capacity and manage resource allocation forecasts
           </p>
         </div>
-        <Dialog open={showTimeLog} onOpenChange={setShowTimeLog}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-quick-log-time-main">
-              <Clock className="h-4 w-4 mr-2" />
-              Log Time
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Quick Time Entry</DialogTitle>
-            </DialogHeader>
-            <TimeLogEntry 
-              workItems={mockTimeLogItems}
-              onSave={(entry) => {
-                console.log('Time entry saved:', entry);
-                setShowTimeLog(false);
-              }}
-              onCancel={() => setShowTimeLog(false)}
-            />
-          </DialogContent>
-        </Dialog>
       </div>
 
       {/* Quick Stats */}
@@ -179,7 +67,7 @@ export default function MainDashboard() {
             <div className="flex items-center gap-2">
               <Users className="h-5 w-5 text-primary" />
               <div>
-                <div className="text-2xl font-bold">8</div>
+                <div className="text-2xl font-bold" data-testid="stat-team-members">{teamMembers.length}</div>
                 <p className="text-xs text-muted-foreground">Team Members</p>
               </div>
             </div>
@@ -191,7 +79,7 @@ export default function MainDashboard() {
             <div className="flex items-center gap-2">
               <TrendingUp className="h-5 w-5 text-green-500" />
               <div>
-                <div className="text-2xl font-bold">84%</div>
+                <div className="text-2xl font-bold" data-testid="stat-avg-capacity">{avgCapacity}%</div>
                 <p className="text-xs text-muted-foreground">Avg Capacity</p>
               </div>
             </div>
@@ -203,7 +91,7 @@ export default function MainDashboard() {
             <div className="flex items-center gap-2">
               <Workflow className="h-5 w-5 text-blue-500" />
               <div>
-                <div className="text-2xl font-bold">23</div>
+                <div className="text-2xl font-bold" data-testid="stat-active-items">{activeWorkItems}</div>
                 <p className="text-xs text-muted-foreground">Active Items</p>
               </div>
             </div>
@@ -213,10 +101,10 @@ export default function MainDashboard() {
         <Card>
           <CardContent className="p-4">
             <div className="flex items-center gap-2">
-              <Calendar className="h-5 w-5 text-orange-500" />
+              <Clock className="h-5 w-5 text-orange-500" />
               <div>
-                <div className="text-2xl font-bold">370h</div>
-                <p className="text-xs text-muted-foreground">This Week</p>
+                <div className="text-2xl font-bold" data-testid="stat-allocated-hours">{totalAllocatedHours}h</div>
+                <p className="text-xs text-muted-foreground">Allocated/Week</p>
               </div>
             </div>
           </CardContent>
@@ -224,56 +112,160 @@ export default function MainDashboard() {
       </div>
 
       {/* Main Content Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Team Members */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Team Capacity</h2>
-            <Badge variant="outline">
-              {mockTeamMembers.filter(m => m.currentCapacity >= 90).length} over-allocated
-            </Badge>
-          </div>
-          <div className="space-y-3">
-            {mockTeamMembers.slice(0, 4).map((member) => (
-              <TeamMemberCard 
-                key={member.id} 
-                member={member}
-                onClick={() => console.log('View member details:', member.name)}
-              />
-            ))}
-          </div>
-        </div>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Team Capacity */}
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-3">
+            <CardTitle className="text-lg font-semibold">Team Capacity</CardTitle>
+            {overAllocated > 0 && (
+              <Badge variant="destructive" className="gap-1">
+                <AlertCircle className="h-3 w-3" />
+                {overAllocated} over-allocated
+              </Badge>
+            )}
+          </CardHeader>
+          <CardContent>
+            {teamMembers.length === 0 ? (
+              <div className="text-center py-8">
+                <Users className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                <p className="text-muted-foreground mb-4">No team members yet</p>
+                <Link href="/team-members">
+                  <Button size="sm">Add Team Member</Button>
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {teamMembers.slice(0, 5).map((member) => (
+                  <div key={member.id} className="flex items-center gap-3" data-testid={`dashboard-member-${member.id}`}>
+                    <Avatar className="h-10 w-10">
+                      <AvatarImage src={member.avatar || undefined} />
+                      <AvatarFallback>
+                        {member.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between mb-1">
+                        <p className="font-medium text-sm truncate">{member.name}</p>
+                        <Badge 
+                          variant={member.capacityPercentage >= 100 ? "destructive" : "secondary"}
+                          className="text-xs"
+                        >
+                          {member.capacityPercentage}%
+                        </Badge>
+                      </div>
+                      <Progress 
+                        value={Math.min(member.capacityPercentage, 100)} 
+                        className="h-2"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {member.allocatedHours}h / {member.weeklyHours}h per week
+                      </p>
+                    </div>
+                  </div>
+                ))}
+                {teamMembers.length > 5 && (
+                  <Link href="/team-members">
+                    <Button variant="ghost" size="sm" className="w-full">
+                      View all {teamMembers.length} members
+                    </Button>
+                  </Link>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Active Work Items */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold">Priority Work</h2>
-            <Button variant="outline" size="sm">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Item
-            </Button>
-          </div>
-          <div className="space-y-3">
-            {mockWorkItems.map((item) => (
-              <WorkItemCard 
-                key={item.id}
-                item={item}
-                onClick={() => console.log('View work item:', item.title)}
-                onAssign={(id) => console.log('Assign work item:', id)}
-                onLogTime={(id) => console.log('Log time for:', id)}
-              />
-            ))}
-          </div>
-        </div>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-3">
+            <CardTitle className="text-lg font-semibold">Active Work</CardTitle>
+            <Link href="/work-items">
+              <Button variant="outline" size="sm">View All</Button>
+            </Link>
+          </CardHeader>
+          <CardContent>
+            {workItems.length === 0 ? (
+              <div className="text-center py-8">
+                <Workflow className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+                <p className="text-muted-foreground mb-4">No work items yet</p>
+                <Link href="/work-items">
+                  <Button size="sm">Create Work Item</Button>
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {workItems.slice(0, 5).map((item) => {
+                  const typeColor = item.type === 'demand' 
+                    ? 'bg-blue-500/10 text-blue-500' 
+                    : item.type === 'project'
+                    ? 'bg-purple-500/10 text-purple-500'
+                    : 'bg-green-500/10 text-green-500';
 
-        {/* Resource Overview */}
-        <div>
-          <ResourceOverview 
-            stats={mockResourceStats}
-            teamMembers={mockTeamMembers}
-          />
-        </div>
+                  return (
+                    <div 
+                      key={item.id} 
+                      className="p-3 border rounded-md hover-elevate"
+                      data-testid={`dashboard-work-item-${item.id}`}
+                    >
+                      <div className="flex items-start justify-between gap-2 mb-2">
+                        <p className="font-medium text-sm flex-1">{item.title}</p>
+                        <Badge className={typeColor} variant="secondary">
+                          {item.type}
+                        </Badge>
+                      </div>
+                      <div className="flex items-center gap-3 text-xs text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <Clock className="h-3 w-3" />
+                          <span>{item.totalAllocatedHours}h/wk</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Users className="h-3 w-3" />
+                          <span>{item.allocations.length} assigned</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {workItems.length > 5 && (
+                  <Link href="/work-items">
+                    <Button variant="ghost" size="sm" className="w-full">
+                      View all {workItems.length} items
+                    </Button>
+                  </Link>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Teams Overview */}
+      {teams.length > 0 && (
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
+            <CardTitle className="text-lg font-semibold">Teams</CardTitle>
+            <Link href="/teams">
+              <Button variant="outline" size="sm">Manage Teams</Button>
+            </Link>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              {teams.map((team) => (
+                <div 
+                  key={team.id} 
+                  className="p-4 border rounded-md"
+                  data-testid={`dashboard-team-${team.id}`}
+                >
+                  <h3 className="font-semibold mb-1">{team.name}</h3>
+                  <p className="text-sm text-muted-foreground">
+                    {team.memberCount} {team.memberCount === 1 ? 'member' : 'members'}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
