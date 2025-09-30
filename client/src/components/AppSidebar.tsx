@@ -1,4 +1,4 @@
-import { Home, Settings, TrendingUp, Users, UserPlus, Workflow } from "lucide-react";
+import { Home, Settings, TrendingUp, Users, UserPlus, Workflow, BarChart3 } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -37,6 +37,11 @@ const menuItems = [
     title: "Capacity Planning",
     url: "/priorities",
     icon: TrendingUp,
+  },
+  {
+    title: "Reports",
+    url: "/reports",
+    icon: BarChart3,
   },
 ];
 

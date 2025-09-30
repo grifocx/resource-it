@@ -1,35 +1,9 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, integer, decimal, timestamp, boolean, jsonb, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, integer, decimal, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
-// PostgreSQL enums for work item statuses
-export const demandStatusEnum = pgEnum("demand_status", [
-  "draft",
-  "submitted",
-  "screened",
-  "qualified-approved",
-  "complete",
-  "deferred",
-  "rejected"
-]);
-
-export const projectStatusEnum = pgEnum("project_status", [
-  "initiating",
-  "planning",
-  "executing",
-  "delivering",
-  "closing"
-]);
-
-export const omStatusEnum = pgEnum("om_status", [
-  "planned",
-  "active",
-  "on-hold",
-  "completed"
-]);
-
-// Status arrays for helper functions
+// Status enums for each work item type
 export const demandStatuses = [
   "draft",
   "submitted",

@@ -13,6 +13,7 @@ import Team from "@/pages/Team";
 import WorkItems from "@/pages/WorkItems";
 import Priorities from "@/pages/Priorities";
 import Availability from "@/pages/Availability";
+import Reports from "@/pages/Reports";
 
 function Router() {
   return (
@@ -22,6 +23,7 @@ function Router() {
       <Route path="/team-members" component={Team} />
       <Route path="/work-items" component={WorkItems} />
       <Route path="/priorities" component={Priorities} />
+      <Route path="/reports" component={Reports} />
       <Route path="/availability" component={Availability} />
       <Route component={NotFound} />
     </Switch>
