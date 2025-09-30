@@ -17,7 +17,7 @@ interface PriorityColumn {
 
 export default function Priorities() {
   const { data: workItems = [], isLoading } = useQuery<WorkItemWithAllocations[]>({
-    queryKey: ["/api/work-items"],
+    queryKey: ["/api", "work-items"],
   });
 
   const [draggedItem, setDraggedItem] = useState<string | null>(null);
@@ -28,7 +28,7 @@ export default function Priorities() {
       return apiRequest("PATCH", `/api/work-items/${id}`, { priority });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/work-items"] });
+      queryClient.invalidateQueries({ queryKey: ["/api", "work-items"] });
     },
   });
 

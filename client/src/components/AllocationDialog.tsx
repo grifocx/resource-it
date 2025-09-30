@@ -55,7 +55,7 @@ export default function AllocationDialog({
   const isEditing = !!existingAllocation;
 
   const { data: teamMembers = [], isLoading: isLoadingMembers } = useQuery<TeamMember[]>({
-    queryKey: ["/api/team-members"],
+    queryKey: ["/api", "team-members"],
     enabled: open,
   });
 
@@ -100,9 +100,9 @@ export default function AllocationDialog({
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/work-items"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/allocations"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/team-members"] });
+      queryClient.invalidateQueries({ queryKey: ["/api", "work-items"] });
+      queryClient.invalidateQueries({ queryKey: ["/api", "allocations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api", "team-members"] });
       onOpenChange(false);
       form.reset();
       toast({
@@ -126,9 +126,9 @@ export default function AllocationDialog({
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/work-items"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/allocations"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/team-members"] });
+      queryClient.invalidateQueries({ queryKey: ["/api", "work-items"] });
+      queryClient.invalidateQueries({ queryKey: ["/api", "allocations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api", "team-members"] });
       onOpenChange(false);
       form.reset();
       toast({

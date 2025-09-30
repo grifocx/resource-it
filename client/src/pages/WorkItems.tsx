@@ -145,9 +145,9 @@ export default function WorkItems() {
       await apiRequest("DELETE", `/api/allocations/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/work-items"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/allocations"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/team-members"] });
+      queryClient.invalidateQueries({ queryKey: ["/api", "work-items"] });
+      queryClient.invalidateQueries({ queryKey: ["/api", "allocations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api", "team-members"] });
       toast({
         title: "Success",
         description: "Allocation removed successfully",
