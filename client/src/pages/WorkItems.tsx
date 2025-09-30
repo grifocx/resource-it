@@ -22,14 +22,18 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Separator } from "@/components/ui/separator";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Loader2, Pencil, Trash2, Clock, Users } from "lucide-react";
+import { Plus, Loader2, Pencil, Trash2, Clock, Users, ChevronDown, UserPlus, Calendar } from "lucide-react";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import type { WorkItemWithAllocations, InsertWorkItem, WorkItem } from "@shared/schema";
+import type { WorkItemWithAllocations, InsertWorkItem, WorkItem, Allocation } from "@shared/schema";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { insertWorkItemSchema, getValidStatusesForType, getDefaultStatusForType, formatStatusLabel } from "@shared/schema";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
+import AllocationDialog from "@/components/AllocationDialog";
+import { format } from "date-fns";
 
 const workItemTypes = [
   { value: "demand", label: "Demand", description: "New feature requests or enhancements" },
@@ -41,6 +45,13 @@ export default function WorkItems() {
   const [showDialog, setShowDialog] = useState(false);
   const [editingItem, setEditingItem] = useState<WorkItem | null>(null);
   const [deletingItemId, setDeletingItemId] = useState<string | null>(null);
+  const [allocationDialog, setAllocationDialog] = useState<{
+    open: boolean;
+    workItemId: string;
+    workItemTitle: string;
+    allocation?: Allocation;
+  }>({ open: false, workItemId: "", workItemTitle: "" });
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
   const { data: workItems = [], isLoading } = useQuery<WorkItemWithAllocations[]>({
@@ -129,6 +140,29 @@ export default function WorkItems() {
     },
   });
 
+  const deleteAllocationMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/allocations/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/work-items"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/allocations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/team-members"] });
+      toast({
+        title: "Success",
+        description: "Allocation removed successfully",
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Error",
+        description: "Failed to remove allocation. Please try again.",
+        variant: "destructive",
+      });
+      console.error("Failed to delete allocation:", error);
+    },
+  });
+
   const handleOpenDialog = (item?: WorkItem) => {
     if (item) {
       setEditingItem(item);
@@ -163,6 +197,24 @@ export default function WorkItems() {
       setDeletingItemId(id);
       deleteItemMutation.mutate(id);
     }
+  };
+
+  const handleDeleteAllocation = (allocationId: string, memberName: string) => {
+    if (confirm(`Remove ${memberName} from this work item?`)) {
+      deleteAllocationMutation.mutate(allocationId);
+    }
+  };
+
+  const toggleItemExpanded = (itemId: string) => {
+    setExpandedItems(prev => {
+      const next = new Set(prev);
+      if (next.has(itemId)) {
+        next.delete(itemId);
+      } else {
+        next.add(itemId);
+      }
+      return next;
+    });
   };
 
   const getTypeColor = (type: string) => {
@@ -284,38 +336,149 @@ export default function WorkItems() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Clock className="h-4 w-4" />
-                        <span data-testid={`text-allocated-hours-${item.id}`}>
-                          {item.totalAllocatedHours} hrs/week allocated
-                        </span>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Clock className="h-4 w-4" />
+                          <span data-testid={`text-allocated-hours-${item.id}`}>
+                            {item.totalAllocatedHours} hrs/week allocated
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Users className="h-4 w-4" />
+                          <span data-testid={`text-team-members-count-${item.id}`}>
+                            {item.allocations.length} {item.allocations.length === 1 ? 'person' : 'people'}
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Users className="h-4 w-4" />
-                        <span data-testid={`text-team-members-count-${item.id}`}>
-                          {item.allocations.length} {item.allocations.length === 1 ? 'person' : 'people'}
-                        </span>
-                      </div>
-                    </div>
-                    {item.allocations.length > 0 && (
-                      <div className="flex -space-x-2">
-                        {item.allocations.slice(0, 3).map((allocation) => (
-                          <Avatar key={allocation.id} className="h-8 w-8 border-2 border-background">
-                            <AvatarImage src={allocation.teamMember.avatar || undefined} />
-                            <AvatarFallback className="text-xs">
-                              {allocation.teamMember.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
-                            </AvatarFallback>
-                          </Avatar>
-                        ))}
-                        {item.allocations.length > 3 && (
-                          <div className="h-8 w-8 rounded-full border-2 border-background bg-muted flex items-center justify-center text-xs">
-                            +{item.allocations.length - 3}
+                      <div className="flex items-center gap-2">
+                        {item.allocations.length > 0 && (
+                          <div className="flex -space-x-2">
+                            {item.allocations.slice(0, 3).map((allocation) => (
+                              <Avatar key={allocation.id} className="h-8 w-8 border-2 border-background">
+                                <AvatarImage src={allocation.teamMember.avatar || undefined} />
+                                <AvatarFallback className="text-xs">
+                                  {allocation.teamMember.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                                </AvatarFallback>
+                              </Avatar>
+                            ))}
+                            {item.allocations.length > 3 && (
+                              <div className="h-8 w-8 rounded-full border-2 border-background bg-muted flex items-center justify-center text-xs">
+                                +{item.allocations.length - 3}
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
-                    )}
+                    </div>
+
+                    <Separator />
+
+                    <Collapsible open={expandedItems.has(item.id)} onOpenChange={() => toggleItemExpanded(item.id)}>
+                      <div className="flex items-center justify-between">
+                        <CollapsibleTrigger asChild>
+                          <Button 
+                            variant="ghost" 
+                            size="sm" 
+                            className="gap-2"
+                            data-testid={`button-toggle-allocations-${item.id}`}
+                          >
+                            <ChevronDown className={`h-4 w-4 transition-transform ${expandedItems.has(item.id) ? 'rotate-180' : ''}`} />
+                            Manage Allocations
+                          </Button>
+                        </CollapsibleTrigger>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-2"
+                          onClick={() => setAllocationDialog({
+                            open: true,
+                            workItemId: item.id,
+                            workItemTitle: item.title,
+                          })}
+                          data-testid={`button-add-allocation-${item.id}`}
+                        >
+                          <UserPlus className="h-4 w-4" />
+                          Assign
+                        </Button>
+                      </div>
+
+                      <CollapsibleContent className="space-y-2 mt-3">
+                        {item.allocations.length === 0 ? (
+                          <div className="text-center py-4 text-sm text-muted-foreground">
+                            No team members assigned yet
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {item.allocations.map((allocation) => (
+                              <div
+                                key={allocation.id}
+                                className="flex items-center justify-between p-3 border rounded-md hover-elevate"
+                                data-testid={`allocation-${allocation.id}`}
+                              >
+                                <div className="flex items-center gap-3 flex-1">
+                                  <Avatar className="h-10 w-10">
+                                    <AvatarImage src={allocation.teamMember.avatar || undefined} />
+                                    <AvatarFallback>
+                                      {allocation.teamMember.name.split(' ').map(n => n[0]).join('').slice(0, 2)}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="font-medium text-sm" data-testid={`text-member-name-${allocation.id}`}>
+                                      {allocation.teamMember.name}
+                                    </p>
+                                    <div className="flex items-center gap-3 text-xs text-muted-foreground mt-1">
+                                      <div className="flex items-center gap-1">
+                                        <Clock className="h-3 w-3" />
+                                        <span data-testid={`text-hours-${allocation.id}`}>
+                                          {allocation.hoursPerWeek}h/week
+                                        </span>
+                                      </div>
+                                      <div className="flex items-center gap-1">
+                                        <Calendar className="h-3 w-3" />
+                                        <span data-testid={`text-dates-${allocation.id}`}>
+                                          {format(new Date(allocation.startDate), 'MMM d, yyyy')}
+                                          {allocation.endDate && ` - ${format(new Date(allocation.endDate), 'MMM d, yyyy')}`}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    {allocation.notes && (
+                                      <p className="text-xs text-muted-foreground mt-1 line-clamp-1">
+                                        {allocation.notes}
+                                      </p>
+                                    )}
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => setAllocationDialog({
+                                      open: true,
+                                      workItemId: item.id,
+                                      workItemTitle: item.title,
+                                      allocation,
+                                    })}
+                                    data-testid={`button-edit-allocation-${allocation.id}`}
+                                  >
+                                    <Pencil className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    onClick={() => handleDeleteAllocation(allocation.id, allocation.teamMember.name)}
+                                    data-testid={`button-delete-allocation-${allocation.id}`}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </CollapsibleContent>
+                    </Collapsible>
                   </div>
                 </CardContent>
               </Card>
@@ -460,6 +623,14 @@ export default function WorkItems() {
           </Form>
         </DialogContent>
       </Dialog>
+
+      <AllocationDialog
+        open={allocationDialog.open}
+        onOpenChange={(open) => setAllocationDialog(prev => ({ ...prev, open }))}
+        workItemId={allocationDialog.workItemId}
+        workItemTitle={allocationDialog.workItemTitle}
+        existingAllocation={allocationDialog.allocation}
+      />
     </div>
   );
 }
